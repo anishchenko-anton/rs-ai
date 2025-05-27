@@ -46,12 +46,31 @@ class LocalKnowledgeBaseRetriever:
         Добавляет новые документы в индекс.
         documents: список словарей, где каждый словарь {'id': int, 'text': str}
         """
+        text_keys_priority = ['desc', 'desc_short', 'description', 'paragraph_text'] # Добавьте сюда возможные ключи в порядке приоритета
+        new_texts = []
+
+        for doc in documents:
+            found_text = False
+            for key in text_keys_priority:
+                if key in doc:
+                    new_texts.append(doc[key])
+                    found_text = True
+                    break
+            if not found_text:
+                print(f"Предупреждение: Документ ID {doc.get('id', 'N/A')} не содержит ни одного из ожидаемых текстовых ключей ({', '.join(text_keys_priority)}). Документ пропущен.")
+                # Можно также добавить пустую строку, если хотите, чтобы документ все равно был в индексе, но без текста:
+                # new_texts.append("") 
+        
+        if not new_texts:
+            print("Не удалось извлечь текст ни из одного документа. Индекс не будет построен.")
+            return
+
         if self.embedding_model.get_dimension() == 0:
             print("Модель эмбеддингов не загружена, невозможно добавить документы.")
             return
 
         print(f"Добавление {len(documents)} документов в индекс для модели '{self.model_name}'...")
-        new_texts = [doc['text'] for doc in documents]
+        new_texts = [doc['desc'] for doc in documents]
         
         try:
             new_embeddings = self.embedding_model.encode(new_texts)
@@ -74,7 +93,7 @@ class LocalKnowledgeBaseRetriever:
         for i, doc in enumerate(documents):
             if 'id' not in doc or doc['id'] is None:
                 doc['id'] = start_id + i 
-            self.documents_meta.append({'id': doc['id'], 'text': doc['text']})
+            self.documents_meta.append({'id': doc['id'], 'desc': doc['desc']})
         
         print(f"Документы добавлены. Общее количество документов в индексе: {len(self.documents_meta)}")
         self._save_index_and_meta()
@@ -118,7 +137,7 @@ class LocalKnowledgeBaseRetriever:
         for i, idx in enumerate(I[0]):
             if idx != -1 and idx < len(self.documents_meta):
                 doc_score = D[0][i] 
-                doc_text = self.documents_meta[idx]['text']
+                doc_text = self.documents_meta[idx]['desc']
                 doc_id = self.documents_meta[idx]['id'] 
 
                 retrieved_documents.append({
